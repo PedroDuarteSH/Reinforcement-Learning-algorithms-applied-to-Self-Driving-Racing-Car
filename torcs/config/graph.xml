@@ -66,6 +66,9 @@
 
     <section name="0">
       <attnum name="fovy-9-0" val="9"/>
+      <attstr name="current driver" val="scr_server 1"/>
+      <attnum name="camera" val="0"/>
+      <attnum name="camera head list" val="0"/>
     </section>
 
   </section>

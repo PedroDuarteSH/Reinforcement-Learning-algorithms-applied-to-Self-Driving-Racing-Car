@@ -2,6 +2,7 @@
 import socket
 import sys
 import os
+
 import subprocess
 import signal
 from torcs_env.envs.msgParser import MsgParser
@@ -15,6 +16,7 @@ TORCS_PATH = uppath(__file__, 3) + '\\torcs'
 
 class TorcsClient:
     def __init__(self, training = False):
+        
         self.messageParser = MsgParser()
         
         self.host = 'localhost'
@@ -22,9 +24,11 @@ class TorcsClient:
         self.bot_id = 'SCR'
         
         self.sock = self.init_socket()
+        
         self.training = training
         self.process = None
         self.start_race()
+        self.connect()
     
     
     def init_socket(self):
@@ -45,11 +49,10 @@ class TorcsClient:
         else:
             self.process = subprocess.Popen(["wtorcs.exe"], cwd=TORCS_PATH, )
     
-    def restart_race(self):
-        #os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
-        #self.start_race(self)
-        ...
-         
+    def kill(self):
+       # os.kill(self.process.pid, signal.CTRL_C_EVENT)
+        self.sock.close()
+
     def init(self):
         '''Return init string with rangefinder angles'''
         self.angles = [0 for x in range(19)]
@@ -68,7 +71,7 @@ class TorcsClient:
     def connect(self):
         while True:
             buf = self.bot_id + self.init()
-            print ('Sending init string to server:', buf)
+            #print ('Sending init string to server:', buf)
     
             try:
                 self.sock.sendto(buf.encode(), (self.host, self.port))
@@ -82,7 +85,8 @@ class TorcsClient:
                     print ('Received: ', buf)
                     return
             except socket.error:
-                print ("didn't get response from server...")
+                ...
+                #print ("didn't get response from server...")
     
     
     def sendMessage(self, message):

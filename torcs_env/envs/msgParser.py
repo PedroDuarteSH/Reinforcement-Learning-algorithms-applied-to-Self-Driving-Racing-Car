@@ -4,6 +4,8 @@ Created on Apr 5, 2012
 @author: lanquarden
 '''
 
+import numpy as np
+
 class MsgParser(object):
     '''
     A parser for received UDP messages and building UDP messages
@@ -14,9 +16,7 @@ class MsgParser(object):
     def parse(self, str_sensors):
         '''Return a dictionary with tags and values from the UDP message'''
         sensors = {}
-        
         b_open = str_sensors.find('(')
-        
         while b_open >= 0:
             b_close = str_sensors.find(')', b_open)
             if b_close >= 0:
@@ -25,9 +25,7 @@ class MsgParser(object):
                 if len(items) < 2:
                     print("Problem parsing substring: ", substr)
                 else:
-                    value = []
-                    for i in range(1,len(items)):
-                        value.append(items[i])
+                    value = np.array(items[1:], dtype=np.float)
                     sensors[items[0]] = value
                 b_open = str_sensors.find('(', b_close)
             else:
