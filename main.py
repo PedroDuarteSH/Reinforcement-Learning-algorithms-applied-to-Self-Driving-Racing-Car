@@ -2,7 +2,7 @@ import gym
 import random
 import torcs_env
 def main():
-    env = gym.make("Torcs-v0")
+    env = gym.make("Torcs-v0", render_mode = "human")
     states = env.observation_space
     actions = env.action_space
     print(actions)

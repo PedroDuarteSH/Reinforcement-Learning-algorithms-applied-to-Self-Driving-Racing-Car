@@ -6,14 +6,19 @@ from torcs_env.envs.client import TorcsClient
 
 class TorcsEnv(gym.Env):
     """Custom Environment that follows gym interface"""
-    metadata = {'render.modes': ['human']}
+    metadata = {"render_modes": ["human", "training"]}
 
-    def __init__(self):
+    def __init__(self, render_mode=None):
         super(TorcsEnv, self).__init__()
         self.firstEpisode = True
+        
+        if render_mode == "human":
+            self.training = False
+        else:
+            self.training = True
         # Define action and observation space
         # They must be gym.spaces objects
-        self.client = TorcsClient(False)
+        self.client = TorcsClient(self.training)
         
         torcsActions = {
             'accel' : spaces.Box(low=0, high=1),
@@ -64,7 +69,6 @@ class TorcsEnv(gym.Env):
         action['gear'] = [action['gear']]
         observation  = self.client.recieveMessage()
         reward = self.reward(float(observation['speedX'][0]), float(observation['distRaced'][0]), float(observation['angle'][0]), float(observation['distFromStart'][0]))
-        reward = 1
         info = {}
         # Put if wall etc, now just to try
         terminated = self.checkTerminated(observation)
@@ -82,7 +86,7 @@ class TorcsEnv(gym.Env):
         # Reset the state of the environment to an initial state
         else:
             self.client.kill()
-            self.client = TorcsClient(False)
+            self.client = TorcsClient(self.training)
             ...
         
     def render(self, mode='human', close=False):
@@ -138,5 +142,4 @@ class TorcsEnv(gym.Env):
                 Reward=np.abs(trackpos)*(-1)
         else:
             Reward=Rspeed+Rtrackpos+Rangle
-        #print("Reward = "+str(Reward))
         return Reward
