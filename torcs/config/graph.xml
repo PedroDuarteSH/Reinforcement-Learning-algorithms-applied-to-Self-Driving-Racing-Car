@@ -70,6 +70,7 @@
       <attnum name="camera" val="0"/>
       <attnum name="camera head list" val="0"/>
       <attnum name="fovy-0-0" val="40"/>
+      <attnum name="driver board" val="0"/>
     </section>
 
   </section>

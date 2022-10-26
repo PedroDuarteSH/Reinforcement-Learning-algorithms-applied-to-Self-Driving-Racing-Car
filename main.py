@@ -1,27 +1,40 @@
+from operator import mod
 import gym
 import random
 import torcs_env
+import numpy as np
+
+from stable_baselines3 import DDPG
+from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
+
+
 def main():
     env = gym.make("Torcs-v0", render_mode = "human")
     states = env.observation_space
     actions = env.action_space
-    print(actions)
+    # the noise objects for DDPG
+    #n_actions = 3
+    #action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
 
-    episodes = 10
-    for episode in range(1, episodes + 1):
-        env.reset()
-        done = False
-        score = 0
+    #model = DDPG("MlpPolicy", env, action_noise=action_noise, verbose=1)
+    #model.learn(total_timesteps=10000, log_interval=10)
+    for i in range(10):
+        obs = env.reset()
         
-        while not done:
-            env.render()
+        while True:
+            #action, _states = model.predict(obs)
             action = env.action_space.sample()
-            n_state, reward, terminated, truncated, info = env.step(action)
-            done = terminated
+            obs, rewards, terminated, info = env.step(action)
+            
+            env.render()
+            
+            if(terminated):
+                print("HEre")
+                break
 
-            score += reward
-        print(f'Episode: {episode} Score: {score} ')
- 
+
+
 if __name__ == "__main__":
     main()
 
+###

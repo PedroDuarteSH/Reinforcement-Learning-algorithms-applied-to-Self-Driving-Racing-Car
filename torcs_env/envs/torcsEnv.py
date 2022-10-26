@@ -10,8 +10,7 @@ class TorcsEnv(gym.Env):
 
     def __init__(self, render_mode=None):
         super(TorcsEnv, self).__init__()
-        self.firstEpisode = True
-        
+        self.connected = False
         if render_mode == "human":
             self.training = False
         else:
@@ -19,19 +18,17 @@ class TorcsEnv(gym.Env):
         # Define action and observation space
         # They must be gym.spaces objects
         self.client = TorcsClient(self.training)
-        
+        self.stuck = 0
         torcsActions = {
-            'accel' : spaces.Box(low=0, high=1),
-            'break' : spaces.Box(low=0, high=1),
-            'steer' : spaces.Box(low=-1, high=1),
-            'clutch' : spaces.Box(low=0, high=1),
-            'focus' : spaces.Box(low=-90, high=90),
-            'gear' : spaces.Discrete(7, start= -1),
-            # Used to terminate Race
-            #'meta' : spaces.Discrete(n=2)
+            'accel' : spaces.Box(low=0, high=1, shape = (1, )),
+            'break' : spaces.Box(low=0, high=1, shape = (1, )),
+            'steer' : spaces.Box(low=-1, high=1, shape = (1, )),
         }
         
-        self.action_space = spaces.Dict(torcsActions)
+        # Box 2, 1 action
+        # 1 - Break / Accel
+        # 2 - Steering        
+        self.action_space = spaces.Box(low=-1, high=1, shape=(2,))
 
         # Parameters Recieved
         # Angle, CurrentLapTime, Damage, DistanceFromStart, DistanceRaced, Fuel, Gear, LastLapTime, Opponents * 36?
@@ -39,64 +36,84 @@ class TorcsEnv(gym.Env):
         
         #To use: Gear, DistanceFromStart, DistanceRaced, Gear, RPM, Track Sensors 
         torcsSpaces = {
-            'angle' : spaces.Box(low=-np.pi, high=np.pi),
-            'curLapTime' : spaces.Box(low = 0, high=float("+inf")),
-            'damage' : spaces.Box(low=0, high= float("+inf")),
-            'distFromStart' : spaces.Box(low=0, high=float("+inf")),
-            'distRaced' : spaces.Box(low = 0, high=float("+inf")),
-            'fuel': spaces.Box(low=0, high=float("+inf")),
-            'gear' : spaces.Discrete(7, start= -1),
-            'lastLapTime' : spaces.Box(low=0, high=float("+inf")),
+            'angle' : spaces.Box(low=-np.pi, high=np.pi, shape = (1, )),
+            'curLapTime' : spaces.Box(low = 0, high=float("+inf"), shape = (1, )),
+            'damage' : spaces.Box(low=0, high= float("+inf"), shape = (1, )),
+            'distFromStart' : spaces.Box(low=0, high=float("+inf"), shape = (1, )),
+            'distRaced' : spaces.Box(low = 0, high=float("+inf"), shape = (1, )),
+            'fuel': spaces.Box(low=0, high=float("+inf"), shape = (1, )),
+            'gear' : spaces.Discrete(7),
+            'lastLapTime' : spaces.Box(low=0, high=float("+inf"), shape = (1, )),
             'opponents' : spaces.Box(low=0, high=200, shape=(36, )),
-            'racePos' : spaces.Discrete(20, start=1),
-            'rpm' : spaces.Box(low=0, high=float("+inf")),
-            'speedX': spaces.Box(low = float("-inf"), high=float("+inf")),
-            'speedY': spaces.Box(low = float("-inf"), high=float("+inf")),
-            'speedZ': spaces.Box(low = float("-inf"), high=float("+inf")),
+            'racePos' : spaces.Discrete(20),
+            'rpm' : spaces.Box(low=0, high=float("+inf"), shape = (1, )),
+            'speedX': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
+            'speedY': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
+            'speedZ': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
             'track' : spaces.Box(low=0, high=200, shape=(19, )),
-            'trackPos': spaces.Box(low = float("-inf"), high=float("+inf")),
-            'wheelSpinVel' : spaces.Box(low = 0, high=float("+inf")),
-            'z': spaces.Box(low = float("-inf"), high=float("+inf")),
+            'trackPos': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
+            'wheelSpinVel' : spaces.Box(low = 0, high=float("+inf"), shape = (4, )),
+            'z': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
             'focus': spaces.Box(low= 0, high=200, shape=(5,)),
         }
         
         self.observation_space = spaces.Dict(torcsSpaces)
-    
         self.previousObservation = None
 
-
     def step(self, action):
-        action['gear'] = [action['gear']]
+        if not self.connected:
+            self.connected = True
+        action = self.processAction(action)
+        
         observation  = self.client.recieveMessage()
-        reward = self.reward(float(observation['speedX'][0]), float(observation['distRaced'][0]), float(observation['angle'][0]), float(observation['distFromStart'][0]))
+        if observation == {}:
+            
+            observation  = self.reset()
+        action['gear'] = [self.gear(observation['gear'][0], observation['rpm'][0])]
+        reward = self.reward(observation)
         info = {}
         # Put if wall etc, now just to try
         terminated = self.checkTerminated(observation)
+        if(terminated):
+            action['meta'] = [1]
         self.client.sendMessage(action)
 
         self.previousObservation = observation
-        return observation, reward, terminated, 0, info
+        return observation, reward, terminated, info
     
     
-    
-    
-    def reset(self, ):
-        if self.firstEpisode:
-            self.firstEpisode = False
-        # Reset the state of the environment to an initial state
+    # Create Dictionary from action
+    def processAction(self, action):
+        if action.shape == (1, 2):
+            return {}
+        output = {}
+        if(action[0] > 0):
+            
+            output['accel'] = [action[0]]
+            output['break'] = [0]
         else:
-            self.client.kill()
-            self.client = TorcsClient(self.training)
-            ...
+            output['accel'] = [0]
+            output['break'] = [-action[0]]
+        output['steer'] = [action[1]]
+        return output
+    
+   
+    
+    
+    def show_results(self):
+        self.training = False
+    
+    def reset(self):
+        self.client.restart(self.training)
+        return self.step(np.array([0, 0, 0, 0]))[0]
+        
+        
         
     def render(self, mode='human', close=False):
         # Render the environment to the screen
         ...
         
-    
     def checkTerminated(self, observation):
-        
-        # Vehicle is damaged
         if int(observation['damage'][0]) > 0:
             print("Got Damage")
             return 1
@@ -106,40 +123,56 @@ class TorcsEnv(gym.Env):
             return 1
         # Vehicle is oriented Backwards
         if np.cos(observation['angle']) < 0:
-            print("Angle " + observation['gear'])
-            return 1
-            
-        if self.previousObservation != None:
-            #Compare with previous to see progress
-            ...
-            
-            
-        return 0
+            print("Angle ")
+            return 1  
         
+        if self.stuck == 25:
+            return 1
+        return 0
     
         
-    def reward(self, speed,trackpos,angle,dist):
-        stuck = 0
-        SOOT = 0
-        OOT = 0
-        if np.abs(trackpos)>=0.98:
-            OOT=1   
-        elif np.abs(trackpos)>=0.75:
-            SOOT=1    
+    def reward(self, observation):
+        speed = observation['speedX'][0]
+        trackpos = observation['trackPos'][0]
+        angle =  observation['angle'][0]
+        dist = observation['distRaced'][0]
+        
+        if (np.abs(angle) >= 45 and speed<10) or (speed<3 and dist>20):
+            self.stuck += 1
+            return -1.5
+        else:
+            self.stuck = 0
+            
             
         Rspeed=np.power((speed/float(160)),4)*0.05
         Rtrackpos=np.power(1/(float(np.abs(trackpos))+1),4)*0.7
         Rangle=np.power((1/((float(np.abs(angle))/40)+1)),4)*0.25
 
-        if stuck==1:
-            Reward=-2
-        elif SOOT==1:
-            Reward=(Rspeed+Rtrackpos+Rangle)*0.5
-        elif OOT==1:
+        if np.abs(trackpos)>=0.98:
             if np.abs(trackpos) >=1.5:
-                Reward=-1.5
+                return -1.5
             else:
-                Reward=np.abs(trackpos)*(-1)
-        else:
-            Reward=Rspeed+Rtrackpos+Rangle
-        return Reward
+                return np.abs(trackpos)*(-1) 
+        elif np.abs(trackpos)>=0.75:
+            return (Rspeed+Rtrackpos+Rangle)*0.5  
+            
+        
+       
+        return Rspeed+Rtrackpos+Rangle
+
+    
+
+    
+    
+    def gear(self, gear, rpm):
+        gearup   =[7000 , 7000 , 7000 , 7000 , 7000 , 0]
+        geardown =[0 , 2500 , 3000 , 3000 , 3500 , 3500]
+        gear = int(gear)
+        rpm = int(rpm)
+        if gear < 1 :
+            gear = 1 
+        if(gear < 6) and (rpm  >= gearup[gear -1]):
+            gear = gear +1 ;
+        elif(gear > 1) and (rpm <= geardown[gear -1]):
+            gear =  gear -1
+        return gear

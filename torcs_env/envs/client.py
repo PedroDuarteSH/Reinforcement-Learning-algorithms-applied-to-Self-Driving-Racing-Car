@@ -27,8 +27,7 @@ class TorcsClient:
         
         self.training = training
         self.process = None
-        self.start_race()
-        self.connect()
+        
     
     
     def init_socket(self):
@@ -45,13 +44,26 @@ class TorcsClient:
 
     def start_race(self):
         if self.training:
-            self.process = subprocess.Popen(["wtorcs.exe",  "-r", "race_config.xml"], cwd=TORCS_PATH, )
+            self.process = subprocess.Popen(["wtorcs.exe",  "-r", "race_config.xml"], cwd=TORCS_PATH, shell =False )
         else:
-            self.process = subprocess.Popen(["wtorcs.exe"], cwd=TORCS_PATH, )
+            self.process = subprocess.Popen(["wtorcs.exe"], cwd=TORCS_PATH, shell =False )
+            
+            
+    def restart(self, training):
+        self.training = training
+        
+        
+        try:
+            if(self.process != None):
+                self.process.kill()
+        except OSError:
+            print("Process Already Killed")
+            pass
+        self.start_race()
+        self.connect()
+        
     
-    def kill(self):
-       # os.kill(self.process.pid, signal.CTRL_C_EVENT)
-        self.sock.close()
+
 
     def init(self):
         '''Return init string with rangefinder angles'''
@@ -85,8 +97,8 @@ class TorcsClient:
                     print ('Received: ', buf)
                     return
             except socket.error:
-                ...
                 #print ("didn't get response from server...")
+                ...
     
     
     def sendMessage(self, message):
