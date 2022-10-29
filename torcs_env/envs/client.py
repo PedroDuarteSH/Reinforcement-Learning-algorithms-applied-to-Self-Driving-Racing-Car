@@ -44,7 +44,7 @@ class TorcsClient:
 
     def start_race(self):
         if self.training:
-            self.process = subprocess.Popen(["wtorcs.exe",  "-r", "race_config.xml"], cwd=TORCS_PATH, shell =False )
+            self.process = subprocess.Popen(["wtorcs.exe",  "-r", "race_config.xml"], cwd=TORCS_PATH, shell =False, stdout=subprocess.DEVNULL)
         else:
             self.process = subprocess.Popen(["wtorcs.exe"], cwd=TORCS_PATH, shell =False )
             

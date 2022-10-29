@@ -1,40 +1,32 @@
-from operator import mod
 import gym
-import random
-import torcs_env
 import numpy as np
-
+from stable_baselines3 import A2C
+import torcs_env
 from stable_baselines3 import DDPG
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
+from stable_baselines3.common.callbacks import CheckpointCallback
+
+env = gym.make("Torcs-v0", render_mode="human")
 
 
-def main():
-    env = gym.make("Torcs-v0", render_mode = "human")
-    states = env.observation_space
-    actions = env.action_space
-    # the noise objects for DDPG
-    #n_actions = 3
-    #action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
+# The noise objects for DDPG
 
-    #model = DDPG("MlpPolicy", env, action_noise=action_noise, verbose=1)
-    #model.learn(total_timesteps=10000, log_interval=10)
-    for i in range(10):
-        obs = env.reset()
-        
-        while True:
-            #action, _states = model.predict(obs)
-            action = env.action_space.sample()
-            obs, rewards, terminated, info = env.step(action)
-            
-            env.render()
-            
-            if(terminated):
-                print("HEre")
-                break
+n_actions = env.action_space.shape[-1]
+action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
 
+model = DDPG("MultiInputPolicy", env, verbose=1)
+model.learn(total_timesteps=5000000, progress_bar=True)
+model.save("DDPG")
+model = DDPG.load("DDPG", env=env)
 
-
-if __name__ == "__main__":
-    main()
-
-###
+env.show_results()
+obs = env.reset()
+while True:
+    action, _states = model.predict(obs)
+    print(action)
+    obs, rewards, done, info = env.step(action)
+    print(obs)
+    #if(done):
+    #    break
+    env.render()
+    
