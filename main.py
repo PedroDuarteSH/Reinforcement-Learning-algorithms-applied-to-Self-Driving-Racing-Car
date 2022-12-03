@@ -1,32 +1,37 @@
-import gym
-import numpy as np
-from stable_baselines3 import A2C
-import torcs_env
-from stable_baselines3 import DDPG
-from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
-from stable_baselines3.common.callbacks import CheckpointCallback
+import argparse
+from model import Model
 
-env = gym.make("Torcs-v0", render_mode="human")
+def main():
+    args = process_arguments()
+   
+    model = Model(args)
+    if(model.showResult and model.modelName != ""):
+        model.showResults()
+        
+    model.createModel()
+    model.createCallback()
+    model.trainModel()
+    model.saveModel()
+    if(model.showResults):
+        model.showResults()
 
+def process_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--a", help="Algorithm To Be Used in Training", type=str, default="DQN", choices=["DQN", "A2C", "DDPG"])
+    parser.add_argument("--ed", help="Enviroment Debug", type=bool, default=False)
+    parser.add_argument("--s", help="Show Results, should be used with --d ant --m to specify the path of the model", type=bool, default=False)
+    parser.add_argument("--m", help="Model Name", type=str, default="")
+    parser.add_argument("--n", help="Use custom Network", type=bool, default=False)
+    parser.add_argument("--t", help="Total Timesteps of training", type=int, default=1000000)
+    parser.add_argument("--l", help="Log Interval", type=int, default=1)
+    parser.add_argument("--p", help="Use Progress Bar In training", type=bool, default=True)
+    parser.add_argument("--d", help="Directory to save model", type=str, default="final_models/")
+    parser.add_argument("--v", help="Verbose", type=int, default=1)
+    parser.add_argument("--b", help="Batch Size", type=int, default=64)
+    parser.add_argument("--e", help="Exploration Fraction -> Used with DQN", type=float, default=0.1)
+    parser.add_argument("--td", help="TensorFlow Log saving directory", type=str, default="traininglogs/")
+    args = parser.parse_args()
+    return args
 
-# The noise objects for DDPG
-
-n_actions = env.action_space.shape[-1]
-action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
-
-model = DDPG("MultiInputPolicy", env, verbose=1)
-model.learn(total_timesteps=5000000, progress_bar=True)
-model.save("DDPG")
-model = DDPG.load("DDPG", env=env)
-
-env.show_results()
-obs = env.reset()
-while True:
-    action, _states = model.predict(obs)
-    print(action)
-    obs, rewards, done, info = env.step(action)
-    print(obs)
-    #if(done):
-    #    break
-    env.render()
-    
+if __name__ == "__main__":
+    main()

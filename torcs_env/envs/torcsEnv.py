@@ -3,97 +3,108 @@ import gym
 from gym import spaces
 import numpy as np
 from torcs_env.envs.client import TorcsClient
+MAXSPEED = 300
 
 class TorcsEnv(gym.Env):
     """Custom Environment that follows gym interface"""
     metadata = {"render_modes": ["human", "training"]}
 
-    def __init__(self, render_mode=None):
+    
+    """_summary_:
+    Function to init the agent and initialize the client to connect to the server
+    Also Gym Variables are initialized
+    """
+    def __init__(self, render_mode=None, discrete_action=True):
         super(TorcsEnv, self).__init__()
         self.connected = False
         if render_mode == "human":
             self.training = False
         else:
             self.training = True
-        # Define action and observation space
-        # They must be gym.spaces objects
+
         self.client = TorcsClient(self.training)
         self.stuck = 0
-        torcsActions = {
-            'accel' : spaces.Box(low=0, high=1, shape = (1, )),
-            'break' : spaces.Box(low=0, high=1, shape = (1, )),
-            'steer' : spaces.Box(low=-1, high=1, shape = (1, )),
-        }
+        self.stuckBeggining = 0
         
-        # Box 2, 1 action
-        # 1 - Break / Accel
-        # 2 - Steering        
-        self.action_space = spaces.Box(low=-1, high=1, shape=(2,))
+        
+        
+        # Define action and observation space
+        if discrete_action:
+            self.action_space = spaces.Discrete(n=4)
+        else:
+            # Box 2, 1 action
+            # 1 - Break / Accel
+            # 2 - Steering
+            self.action_space = spaces.Box(low=-1, high=1, shape=(2,))
+        self.time_step = 0
 
+        self.min_reward_limit_start = 300
+        self.min_reward_limit = 1
         # Parameters Recieved
         # Angle, CurrentLapTime, Damage, DistanceFromStart, DistanceRaced, Fuel, Gear, LastLapTime, Opponents * 36?
         # Race Position, RPM, SpeedX, SpeedY, Speedz?, Track Sensors * 19, z?, Focus * 5
-        
-        #To use: Gear, DistanceFromStart, DistanceRaced, Gear, RPM, Track Sensors 
-        torcsSpaces = {
-            'angle' : spaces.Box(low=-np.pi, high=np.pi, shape = (1, )),
-            #'curLapTime' : spaces.Box(low = 0, high=float("+inf"), shape = (1, )),
-            #'damage' : spaces.Box(low=0, high= float("+inf"), shape = (1, )),
-            #'distFromStart' : spaces.Box(low=0, high=float("+inf"), shape = (1, )),
-            #'distRaced' : spaces.Box(low = 0, high=float("+inf"), shape = (1, )),
-            #'fuel': spaces.Box(low=0, high=float("+inf"), shape = (1, )),
-            #'gear' : spaces.Discrete(7),
-            #'lastLapTime' : spaces.Box(low=0, high=float("+inf"), shape = (1, )),
-            #'opponents' : spaces.Box(low=0, high=200, shape=(36, )),
-            #'racePos' : spaces.Discrete(20),
-            #'rpm' : spaces.Box(low=0, high=float("+inf"), shape = (1, )),
-            'speedX': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
-            #'speedY': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
-            #'speedZ': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
-            'track' : spaces.Box(low=0, high=200, shape=(19, )),
-            #'trackPos': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
-            #'wheelSpinVel' : spaces.Box(low = 0, high=float("+inf"), shape = (4, )),
-            #'z': spaces.Box(low = float("-inf"), high=float("+inf"), shape = (1, )),
-            #'focus': spaces.Box(low= 0, high=200, shape=(5,)),
-        }
-        
-        self.observation_space = spaces.Dict(torcsSpaces)
-        self.previousObservation = None
+        # Box 21, 3 observations, 0 - Angle, 1-19- Track Sensors, 20 - Speed,
+        self.observation_space = spaces.Box(low=float("0"), high=float("1"), shape=(21,))
 
     def step(self, action):
         if not self.connected:
             self.connected = True
-        action = self.processAction(action)
         
+        action = self.processAction(action)
         observation  = self.client.recieveMessage()
-        if observation == {}:
-            
+        while observation == {}:
             observation  = self.reset()
             observation  = self.client.recieveMessage()
+    
         action['gear'] = [self.gear(observation['gear'][0], observation['rpm'][0])]
         reward = self.reward(observation)
-        info = {}
-        # Put if wall etc, now just to try
-        terminated = self.checkTerminated()
-        #if(terminated):
-        #    action['meta'] = [1]
-        self.client.sendMessage(action)
 
+        terminated = self.checkTerminated(observation, reward)
+        
+        self.client.sendMessage(action)
+        observation = self.process_obs(observation)
+        self.time_step += 1
         self.previousObservation = observation
-        return self.process_obs(observation), reward, terminated, info
+
+        if terminated:
+            reward = -1000
+
+        return observation, reward, terminated, {}
     
+
+    def getPreviousObservation(self):
+        return self.previousObservation
     
     # Create Dictionary from action
     def processAction(self, action):
-        if action.shape == (1, 2):
-            return {}
         output = {}
-        if(action[0] > 0):
-            output['accel'] = [action[0]]
+        # Action -> Continous space
+        if action.shape == (4,):
+            output['accel'] = [1]
+            output['brake'] = [0]
+            output['steer'] = [0]
+
+        elif action.shape == (2,):
+            if(action[0] > 0):
+                output['accel'] = [action[0]]
+                output['brake'] = [0]
+            else:
+                output['accel'] = [0]
+                output['brake'] = [action[0]]
+            output['steer'] = [action[1]]
+        # Action -> Discrete space
         else:
-            output['break'] = [-action[0]]
-        output['steer'] = [action[1]]
-    
+            output['brake'] = [0]
+            output['accel'] = [0]
+            output['steer'] = [0]
+            if(action == 1):
+                output['accel'] =[1]
+            elif(action == 2):
+                output['brake'] = [1]
+            elif(action == 3):
+                output['steer'] = [-1]
+            else:
+                output['steer'] = [1]
         return output
     
    
@@ -104,52 +115,55 @@ class TorcsEnv(gym.Env):
     
     def reset(self):
         self.client.restart(self.training)
-        
+        self.time_step = 0
+
         obs = self.step(np.array([0, 0, 0, 0]))[0]
         
-        return self.process_obs(obs)
+        return obs
         
-    def process_obs(self, obs):
-        observation = {}
-        observation['angle'] = obs['angle']
-        observation['track'] = obs['track']
-        observation['speedX'] = obs['speedX']
-        return observation
+    # Process observation to be used in the model with normalization
+
+    
+    def process_obs(self, observation):
+        obs = np.zeros(21)
+        obs[0] = (observation['angle']+np.pi)/(2*np.pi)
+        obs[1:20] = observation['track']/200
+        obs[20] = observation['speedX']/MAXSPEED
+        return obs
         
     def render(self, mode='human', close=False):
         # Render the environment to the screen
         ...
         
-    def checkTerminated(self):
+    def checkTerminated(self, observation, current_reward):
+        track = observation['track']
+        angle = observation['angle']
+        damage = observation['damage']
+        #if damage > 0:
+        #    return True
+
+        if track.min() < 0:  # Episode is terminated if the car is out of track
+            return True
+
+
+        if self.min_reward_limit_start < self.time_step: # Episode terminates if the progress of agent is small
+            if current_reward < self.min_reward_limit:
+                return True
+
+        if np.cos(angle) < 0: # Episode is terminated if the agent runs backward
+            return True
+        
        
-        if self.stuck == 25:
-            return 1
-        return 0
+
+        return False
     
         
     def reward(self, observation):
         speed = observation['speedX'][0]
-        trackpos = observation['trackPos'][0]
-        angle = np.degrees(observation['angle'][0])
-        dist = observation['distRaced'][0]
-        is_stuck = False
-        
-        #print(speed, trackpos, angle, dist)
-        if (np.abs(angle) >= 45 and speed<10) or (speed<3 and dist>10):
-            self.stuck += 1
-            return -2
-        else:
-            self.stuck = 0
-        
-        
-        
-        Reward = speed * np.cos(angle)  - speed * np.sin(angle) - speed * np.abs(trackpos)
-        
-        if(speed < 3):
-            return -100
-            
-        
-       
+        angle = observation['angle'][0]
+  
+        Reward = speed * np.cos(angle)
+
         return Reward
 
     

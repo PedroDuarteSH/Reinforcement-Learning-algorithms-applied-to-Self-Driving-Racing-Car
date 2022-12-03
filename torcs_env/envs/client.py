@@ -2,9 +2,7 @@
 import socket
 import sys
 import os
-
 import subprocess
-import signal
 from torcs_env.envs.msgParser import MsgParser
 
 BUFFER_SIZE = 1024
@@ -43,15 +41,17 @@ class TorcsClient:
                 
 
     def start_race(self):
+        print(TORCS_PATH)
         if self.training:
-            self.process = subprocess.Popen(["wtorcs.exe",  "-r", "race_config.xml"], cwd=TORCS_PATH, shell =False, stdout=subprocess.DEVNULL)
+            self.process = subprocess.Popen(["wtorcs",  "-r", "race_config.xml"], cwd=TORCS_PATH, shell =False, stdout=subprocess.DEVNULL)
         else:
-            self.process = subprocess.Popen(["wtorcs.exe"], cwd=TORCS_PATH, shell =False )
+            self.process = subprocess.Popen(["wtorcs"], cwd=TORCS_PATH, shell =False, stdout=subprocess.DEVNULL)
             
             
     def restart(self, training):
-        self.training = training
-        
+        self.training = training   
+        self.sock.close()
+        self.sock = self.init_socket()
         
         try:
             if(self.process != None):
